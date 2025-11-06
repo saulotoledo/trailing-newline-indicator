@@ -14,7 +14,7 @@
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;; Author: Saulo S. de Toledo <saulotoledo@gmail.com>
-;; Version: 0.1.0
+;; Version: 0.2.0
 ;; Package-Requires: ((emacs "26.1"))
 ;; Keywords: convenience, display, editing
 ;; URL: https://github.com/saulotoledo/trailing-newline-indicator
