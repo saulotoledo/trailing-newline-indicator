@@ -66,7 +66,7 @@
   :type 'string
   :group 'trailing-newline-indicator)
 
-(defvar trailing-newline-indicator--overlay nil
+(defvar-local trailing-newline-indicator--overlay nil
   "Overlay used to display the trailing newline indicator in the margin.")
 
 ;; Reserved for future use (not currently used).
