@@ -48,6 +48,11 @@
   :type 'boolean
   :group 'trailing-newline-indicator)
 
+(defcustom trailing-newline-indicator-newline-symbol "⏎"
+  "The icon to use for the newline symbol overlay."
+  :type 'string
+  :group 'trailing-newline-indicator)
+
 (defvar trailing-newline-indicator--overlay nil
   "Overlay used to display the trailing newline indicator in the margin.")
 
@@ -74,7 +79,7 @@ adds an indicator in the left margin for the visual empty line."
                              (max 2 w))
                          3))
              (line (line-number-at-pos (1- (point-max))))
-             (nl-symbol (propertize "⏎" 'face 'line-number))
+             (nl-symbol (propertize trailing-newline-indicator-newline-symbol 'face 'line-number))
              (indicator-text
               (if (and trailing-newline-indicator-show-line-number
                        (bound-and-true-p display-line-numbers))
