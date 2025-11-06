@@ -45,7 +45,7 @@ Alternatively, if you use `use-package`:
 
 *** Manual installation (works on all Emacs versions)
 
-If you’re using an older version of Emacs (before 29), install manually:
+If you're using an older version of Emacs (before 29), install manually:
 
 #+begin_src elisp
 ;; Clone the repository
@@ -70,16 +70,28 @@ Enable globally for all files:
 (global-trailing-newline-indicator-mode 1)
 #+end_src
 
-** Optional Line Number Display
-To show the next line number (e.g., “⏎ 43”) instead of just the ⏎ symbol:
+
+** Configuration
+
+You can customize the indicator and its behavior:
+
+- To show the next line number (e.g., "⏎ 43") instead of just the ⏎ symbol:
 
 #+begin_src elisp
 (setq trailing-newline-indicator-show-line-number t)
 #+end_src
 
-This feature requires `display-line-numbers-mode`.
+This feature requires `display-line-numbers-mode`. If line numbers are disabled,
+only the ⏎ symbol is shown.
 
-If line numbers are disabled, only the ⏎ symbol is shown.
+- To change the indicator icon (default is ⏎), set:
+
+#+begin_src elisp
+(setq trailing-newline-indicator-newline-symbol "↵")
+#+end_src
+
+You can use any string or Unicode character you prefer. This is especially useful
+if your font does not support the default symbol.
 
 ** Example Configuration
 
