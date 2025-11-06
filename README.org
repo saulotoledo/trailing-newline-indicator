@@ -1,8 +1,12 @@
 * trailing-newline-indicator.el
 
-Display a visual indicator (⏎) in the left margin for the trailing newline at
-the end of a file. Optionally, it can also display the next line number (e.g.,
-⏎ 43) when line numbers are active.
+Emacs does not show the file's trailing newline as a visible line, since it is
+just a `\n` at the end of the last real line. This makes it hard to see if a
+file ends with a newline. This package provides a clear indicator (⏎) for that
+otherwise invisible trailing newline. Optionally, it can also display the next
+line number (e.g., ⏎ 43) when line numbers are active.
+
+[[./preview.gif]]
 
 ** Features
 - Shows a ⏎ symbol at the end of a file to mark the trailing newline.
