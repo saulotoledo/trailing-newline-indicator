@@ -119,7 +119,7 @@ adds an indicator in the left margin for the visual empty line."
 ;;;###autoload
 (define-minor-mode trailing-newline-indicator-mode
   "Minor mode to show a special indicator for trailing newlines.
-When enabled, displays an symbol (and optionally a smal line number)
+When enabled, displays a symbol (and optionally a small line number)
 in the left margin for the visual empty line created by a trailing
 newline."
   :lighter " TNLI"
@@ -154,9 +154,6 @@ newline."
 ;;;###autoload
 (define-globalized-minor-mode global-trailing-newline-indicator-mode
   trailing-newline-indicator-mode
-  "Globalized version of `trailing-newline-indicator-mode`.
-Enables the indicator in all suitable buffers except minibuffers, special modes,
-and buffers not visiting files."
   (lambda ()
     (unless (or (minibufferp)
                 (derived-mode-p 'special-mode)
