@@ -23,10 +23,10 @@
 
 ;; trailing-newline-indicator.el provides a minor mode that displays a visual
 ;; indicator (⏎ symbol) in the left margin for the trailing newline at the end
-;; of a file. This helps highlight the “empty visual line” that appears due to
+;; of a file. This helps highlight the "empty visual line" that appears due to
 ;; the final newline character.
 ;;
-;; Optionally, the indicator can also show the next line number (e.g., “⏎ 43”),
+;; Optionally, the indicator can also show the next line number (e.g., "⏎ 43"),
 ;; giving a clearer sense of where the file ends. The line number display is
 ;; controlled by the option:
 ;;
@@ -154,7 +154,14 @@ newline."
 ;;;###autoload
 (define-globalized-minor-mode global-trailing-newline-indicator-mode
   trailing-newline-indicator-mode
-  (lambda () (trailing-newline-indicator-mode 1))
+  "Globalized version of `trailing-newline-indicator-mode`.
+Enables the indicator in all suitable buffers except minibuffers, special modes,
+and buffers not visiting files."
+  (lambda ()
+    (unless (or (minibufferp)
+                (derived-mode-p 'special-mode)
+                (not buffer-file-name))
+      (trailing-newline-indicator-mode 1)))
   :group 'trailing-newline-indicator)
 
 (provide 'trailing-newline-indicator)
