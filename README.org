@@ -1,4 +1,4 @@
-* trailing-newline-indicator.el
+* trailing-newline-indicator
 
 Emacs does not show the file's trailing newline as a visible line, since it is
 just a `\n` at the end of the last real line. This makes it hard to see if a
@@ -58,18 +58,36 @@ If you're using an older version of Emacs (before 29), install manually:
 #+end_src
 
 ** Usage
-Enable locally in the current buffer:
+
+*** Enable locally (current buffer only)
+
+To activate the trailing newline indicator in just the current buffer:
+
+#+begin_src elisp
+M-x trailing-newline-indicator-mode
+#+end_src
+
+Or programmatically:
 
 #+begin_src elisp
 (trailing-newline-indicator-mode 1)
 #+end_src
 
-Enable globally for all files:
+*** Enable globally (all file buffers)
+
+To activate the indicator automatically in all file buffers:
+
+#+begin_src elisp
+M-x global-trailing-newline-indicator-mode
+#+end_src
+
+Or programmatically:
 
 #+begin_src elisp
 (global-trailing-newline-indicator-mode 1)
 #+end_src
 
+The global mode automatically excludes minibuffers, special modes, and buffers without files.
 
 ** Configuration
 
@@ -92,17 +110,3 @@ only the ⏎ symbol is shown.
 
 You can use any string or Unicode character you prefer. This is especially useful
 if your font does not support the default symbol.
-
-** Example Configuration
-
-#+begin_src elisp
-;; Enable display of line numbers globally
-(global-display-line-numbers-mode 1)
-
-;; Enable the trailing newline indicator everywhere
-(global-trailing-newline-indicator-mode 1)
-
-;; Optional: hide line numbers in certain modes
-(dolist (hook '(eshell-mode-hook shell-mode-hook term-mode-hook))
-  (add-hook hook (lambda () (display-line-numbers-mode 0))))
-#+end_src
