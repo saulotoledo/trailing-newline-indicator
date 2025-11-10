@@ -14,7 +14,7 @@
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;; Author: Saulo S. de Toledo <saulotoledo@gmail.com>
-;; Version: 0.3.0
+;; Version: 0.3.1
 ;; Package-Requires: ((emacs "26.1"))
 ;; Keywords: convenience, display, editing
 ;; URL: https://github.com/saulotoledo/trailing-newline-indicator
@@ -145,7 +145,7 @@ adds an indicator in the left margin for the visual empty line."
     (dolist (hook (trailing-newline-indicator--hook-list))
       (remove-hook hook update-fn t))))
 
-;;; Minor Mode Definition:
+;;; Minor Mode Definition and Activation:
 ;;;###autoload
 (define-minor-mode trailing-newline-indicator-mode
   "Minor mode to show a special indicator for trailing newlines.
@@ -156,23 +156,28 @@ newline."
   :group 'trailing-newline-indicator
   (if (or (eq trailing-newline-indicator-mode t)
           (and (numberp trailing-newline-indicator-mode)
-              (> trailing-newline-indicator-mode 0)))
+               (> trailing-newline-indicator-mode 0)))
 
-          (unless trailing-newline-indicator--overlay
-            (trailing-newline-indicator--setup-hooks))
+      (unless trailing-newline-indicator--overlay
+        (trailing-newline-indicator--setup-hooks))
 
     (trailing-newline-indicator--delete-overlay)
     (trailing-newline-indicator--cleanup-hooks)))
+
+(defun trailing-newline-indicator--is-buffer-suitable-for-indicator-p ()
+  "Return non-nil if the current buffer is suitable for the indicator.
+That means that the buffer is not a minibuffer, not a special mode
+buffer, and does not have the indicator already enabled."
+  (and (not (minibufferp))
+       (not (derived-mode-p 'special-mode))
+       buffer-file-name
+       (not trailing-newline-indicator-mode)))
 
 ;;;###autoload
 (define-globalized-minor-mode global-trailing-newline-indicator-mode
   trailing-newline-indicator-mode
   (lambda ()
-    (unless (or (minibufferp)
-                (derived-mode-p 'special-mode)
-                (not buffer-file-name)
-                trailing-newline-indicator-mode)
-
+    (when (trailing-newline-indicator--is-buffer-suitable-for-indicator-p)
       (trailing-newline-indicator-mode 1)))
   :group 'trailing-newline-indicator)
 
