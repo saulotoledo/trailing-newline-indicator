@@ -107,9 +107,9 @@ adds an indicator in the left margin for the visual empty line."
               (if (and trailing-newline-indicator-show-line-number
                        (bound-and-true-p display-line-numbers))
                   (let ((small-num
-                         (propertize (format "%d" (1+ line))
+                         (propertize (format " %d" (1+ line))
                                      'face 'trailing-newline-indicator-small-number)))
-                    (concat nl-symbol " " small-num))
+                    (concat nl-symbol small-num))
                 nl-symbol)))
         ;; Ensure margin is wide enough for line numbers
         (when win
