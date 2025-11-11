@@ -94,13 +94,6 @@ adds an indicator in the left margin for the visual empty line."
     (save-excursion
       (goto-char (1- (point-max)))
       (let* ((ov (make-overlay (point-max) (point-max)))
-             (win (get-buffer-window (current-buffer)))
-             (ln-width (if (and win (bound-and-true-p display-line-numbers))
-                           (let ((w (or (window-parameter win 'line-number-width)
-                                        (length (number-to-string (line-number-at-pos (point-max)))))))
-                             (max 2 w))
-                         3))
-
              (line (line-number-at-pos (1- (point-max))))
              (nl-symbol (propertize trailing-newline-indicator-newline-symbol 'face 'line-number))
              (indicator-text
@@ -111,9 +104,6 @@ adds an indicator in the left margin for the visual empty line."
                                      'face 'trailing-newline-indicator-small-number)))
                     (concat nl-symbol small-num))
                 nl-symbol)))
-        ;; Ensure margin is wide enough for line numbers
-        (when win
-          (set-window-margins win ln-width (cdr (window-margins win))))
         (overlay-put ov 'after-string
                      (propertize "\u200b"
                                  'display `(margin left-margin ,indicator-text)))
