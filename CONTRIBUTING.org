@@ -1,0 +1,70 @@
+* Getting Started
+
+1. **Fork** the repository on GitHub.
+2. **Clone** your fork to your local machine.
+3. Create a **new branch** for your feature or fix:
+    #+begin_src sh
+    git checkout -b feat/your-feature-name
+    #+end_src
+4. Write your Emacs Lisp code, ensuring it passes [[https://melpa.org/#/flycheck][flycheck]] and [[https://github.com/purcell/package-lint][package-lint]].
+5. Follow the commit message guidelines below.
+6. Push your branch and open a **Pull Request (PR)** against the `main` branch
+   of the original repository.
+
+* Commit Message Guidelines
+
+We enforce the use of **Conventional Commits** for all contributions. This helps
+automate changelog generation and semantic versioning.
+
+Your commit message must start with a **type** and a brief **scope** (optional,
+in parentheses), followed by a colon and the subject. The commit description
+should start with a lowercase letter to maintain consistency with the other
+repository commit messages.
+
+#+begin_example
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+#+end_example
+
+| Type | Description | Effect (Semantic Versioning) |
+| :--- | :--- | :--- |
+| **feat** | A new feature or enhancement. | Minor release (vX.Y.0) |
+| **fix** | A bug fix (e.g., solving the focus error). | Patch release (vX.Y.Z) |
+| **docs** | Changes to documentation only. | No version bump |
+| **style** | Formatting changes (white-space, semi-colons, etc.). | No version bump |
+| **refactor** | Code change that neither fixes a bug nor adds a feature. | No version bump |
+| **perf** | A code change that improves performance. | Patch or Minor |
+| **test** | Adding missing tests or correcting existing tests. | No version bump |
+| **build** | Changes that affect the build system or external dependencies. | No version bump |
+
+*Example Commit:*
+#+begin_example
+fix(focus): remove invalid focus-in/out hook associations
+#+end_example
+
+To introduce a **BREAKING CHANGE**, you must include the text *BREAKING CHANGE:*
+in the body or footer of the commit, which triggers a Major version bump.
+
+For more information about conventional commits, please refer to [[https://www.conventionalcommits.org/en/v1.0.0/][this page]].
+
+* Semantic Versioning Policy
+
+This project adheres to **Semantic Versioning (SemVer)** using the format *MAJOR.MINOR.PATCH*.
+
+- **MAJOR (X.y.z):** Incremented when there are incompatibility changes.
+  Requires a `BREAKING CHANGE` commit.
+- **MINOR (x.Y.z):** Incremented when new features are added in a
+  backwards-compatible manner. Triggered by a `feat` commit.
+- **PATCH (x.y.Z):** Incremented when backwards-compatible bug fixes are made.
+  Triggered by a `fix` commit.
+
+The maintainer will handle the version bumping and tagging based on your commit
+history.
+
+* Licensing
+
+By contributing, you agree that your contributions will be licensed under the
+package's existing license.
