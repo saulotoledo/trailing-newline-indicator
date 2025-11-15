@@ -112,16 +112,11 @@ adds an indicator in the left margin for the visual empty line."
 ;;; Control Hooks Setup:
 (defun trailing-newline-indicator--hook-list ()
   "Return the list of hooks used by trailing-newline-indicator."
-  (append
-   ;; Use focus-in-hook if available and not obsolete, else use after-focus-change-function (Emacs 27.1+)
-   (if (boundp 'after-focus-change-function)
-       '(after-focus-change-function)
-     '(focus-in-hook))
-   '(after-change-functions
-     after-save-hook
-     after-revert-hook
-     kill-buffer-hook
-     post-command-hook)))
+  '(after-change-functions
+    after-save-hook
+    after-revert-hook
+    kill-buffer-hook
+    post-command-hook))
 
 (defun trailing-newline-indicator--setup-hooks ()
   "Setup necessary hooks for trailing newline indicator."
