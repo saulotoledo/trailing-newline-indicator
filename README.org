@@ -15,7 +15,35 @@ line number (e.g., ⏎ 43) when line numbers are active.
 
 ** Installation
 
-There are two recommended ways to install this package.
+You can install this package using any of the following methods:
+
+*** Installing via MELPA
+
+This is the recommended method for installing this package.
+
+First, ensure you have the [[https://melpa.org/#/getting-started][MELPA repository]] configured in your Emacs.
+If you haven't already, add this to your init file:
+
+#+begin_src elisp
+(require 'package)
+(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+(package-initialize)
+#+end_src
+
+Then install the package:
+
+#+begin_src elisp
+M-x package-install RET trailing-newline-indicator RET
+#+end_src
+
+Or if you use `use-package`:
+
+#+begin_src elisp
+(use-package trailing-newline-indicator
+  :ensure t
+  :init
+  (global-trailing-newline-indicator-mode 1))
+#+end_src
 
 *** Using package-vc-install (Emacs 29+)
 
@@ -43,19 +71,24 @@ Alternatively, if you use `use-package`:
   (global-trailing-newline-indicator-mode 1))
 #+end_src
 
-*** Manual installation (works on all Emacs versions)
+*** Manual installation
 
-If you're using an older version of Emacs (before 29), install manually:
+For manual installation, clone the repository to a directory in your `load-path`:
+
+#+begin_src shell
+git clone https://github.com/saulotoledo/trailing-newline-indicator.git \
+    ~/.emacs.d/lisp/trailing-newline-indicator
+#+end_src
+
+Then add the following to your Emacs configuration:
 
 #+begin_src elisp
-;; Clone the repository
-;; git clone https://github.com/saulotoledo/trailing-newline-indicator.git \
-;;     ~/.emacs.d/lisp/trailing-newline-indicator
-
 (add-to-list 'load-path "~/.emacs.d/lisp/trailing-newline-indicator")
 (require 'trailing-newline-indicator)
 (global-trailing-newline-indicator-mode 1)
 #+end_src
+
+Note: Adjust the path (`~/.emacs.d/lisp/trailing-newline-indicator`) to match your preferred location.
 
 ** Usage
 
