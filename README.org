@@ -1,3 +1,4 @@
+[[https://melpa.org/#/trailing-newline-indicator][file:https://melpa.org/packages/trailing-newline-indicator-badge.svg]]
 * trailing-newline-indicator
 
 Emacs does not show the file's trailing newline as a visible line, since it is
