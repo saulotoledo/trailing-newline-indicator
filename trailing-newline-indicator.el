@@ -14,7 +14,7 @@
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;; Author: Saulo S. de Toledo <saulotoledo@gmail.com>
-;; Version: 0.3.1
+;; Version: 0.3.5
 ;; Package-Requires: ((emacs "26.1"))
 ;; Keywords: convenience, display, editing
 ;; URL: https://github.com/saulotoledo/trailing-newline-indicator
@@ -118,6 +118,15 @@ adds an indicator in the left margin for the visual empty line."
     kill-buffer-hook
     post-command-hook))
 
+(defun trailing-newline-indicator--in-use-p ()
+  "Return non-nil if any buffer has `trailing-newline-indicator-mode' enabled.
+Uses catch/throw to exit the iteration immediately upon finding a match."
+  (catch 'found
+    (dolist (buf (buffer-list))
+      (when (buffer-local-value 'trailing-newline-indicator-mode buf)
+        (throw 'found t)))
+    nil))
+
 (defun trailing-newline-indicator--setup-hooks ()
   "Setup necessary hooks for trailing newline indicator."
   (let ((update-fn #'trailing-newline-indicator--update-indicator))
@@ -128,7 +137,20 @@ adds an indicator in the left margin for the visual empty line."
   "Remove hooks used by trailing-newline-indicator."
   (let ((update-fn #'trailing-newline-indicator--update-indicator))
     (dolist (hook (trailing-newline-indicator--hook-list))
-      (remove-hook hook update-fn t))))
+      (remove-hook hook update-fn t))
+    (unless (trailing-newline-indicator--in-use-p)
+      (remove-hook 'after-change-major-mode-hook #'trailing-newline-indicator--restore-hooks))))
+
+(defun trailing-newline-indicator--restore-hooks ()
+  "Restore hooks if the mode is active but hooks were cleared.
+In Emacs 31+, major-mode transitions are more aggressive in clearing
+buffer-local variables. Since `trailing-newline-indicator-mode' is
+`permanent-local', it remains enabled during a mode change, but the
+underlying `after-change-functions' and other hooks are wiped. This
+function detects that orphaned state and re-attaches the hooks."
+  (when (and (bound-and-true-p trailing-newline-indicator-mode)
+             (not (memq #'trailing-newline-indicator--update-indicator after-change-functions)))
+    (trailing-newline-indicator--setup-hooks)))
 
 ;;; Minor Mode Definition and Activation:
 ;;;###autoload
@@ -144,6 +166,9 @@ newline."
                (> trailing-newline-indicator-mode 0)))
 
       (unless trailing-newline-indicator--overlay
+        (unless (memq #'trailing-newline-indicator--restore-hooks
+                      (default-value 'after-change-major-mode-hook))
+          (add-hook 'after-change-major-mode-hook #'trailing-newline-indicator--restore-hooks))
         (trailing-newline-indicator--setup-hooks))
 
     (trailing-newline-indicator--delete-overlay)
