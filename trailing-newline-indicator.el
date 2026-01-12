@@ -14,7 +14,7 @@
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;; Author: Saulo S. de Toledo <saulotoledo@gmail.com>
-;; Version: 0.3.5
+;; Version: 0.3.6
 ;; Package-Requires: ((emacs "26.1"))
 ;; Keywords: convenience, display, editing
 ;; URL: https://github.com/saulotoledo/trailing-newline-indicator
@@ -70,6 +70,9 @@
   :group 'trailing-newline-indicator)
 
 ;;; Internal Variables:
+(defvar trailing-newline-indicator--active-count 0
+  "Number of buffers with `trailing-newline-indicator-mode' enabled.")
+
 (defvar-local trailing-newline-indicator--overlay nil
   "Overlay used to display the trailing newline indicator in the margin.")
 
@@ -115,31 +118,13 @@ adds an indicator in the left margin for the visual empty line."
   '(after-change-functions
     after-save-hook
     after-revert-hook
-    kill-buffer-hook
     post-command-hook))
 
-(defun trailing-newline-indicator--in-use-p ()
-  "Return non-nil if any buffer has `trailing-newline-indicator-mode' enabled.
-Uses catch/throw to exit the iteration immediately upon finding a match."
-  (catch 'found
-    (dolist (buf (buffer-list))
-      (when (buffer-local-value 'trailing-newline-indicator-mode buf)
-        (throw 'found t)))
-    nil))
-
-(defun trailing-newline-indicator--setup-hooks ()
-  "Setup necessary hooks for trailing newline indicator."
-  (let ((update-fn #'trailing-newline-indicator--update-indicator))
-    (dolist (hook (trailing-newline-indicator--hook-list))
-      (add-hook hook update-fn nil t))))
-
-(defun trailing-newline-indicator--cleanup-hooks ()
-  "Remove hooks used by trailing-newline-indicator."
-  (let ((update-fn #'trailing-newline-indicator--update-indicator))
-    (dolist (hook (trailing-newline-indicator--hook-list))
-      (remove-hook hook update-fn t))
-    (unless (trailing-newline-indicator--in-use-p)
-      (remove-hook 'after-change-major-mode-hook #'trailing-newline-indicator--restore-hooks))))
+(defun trailing-newline-indicator--on-kill-buffer ()
+  "Disable the trailing newline indicator mode when the buffer is killed.
+This runs the cleanup logic of `trailing-newline-indicator-mode'."
+  (when (bound-and-true-p trailing-newline-indicator-mode)
+    (trailing-newline-indicator-mode -1)))
 
 (defun trailing-newline-indicator--restore-hooks ()
   "Restore hooks if the mode is active but hooks were cleared.
@@ -151,6 +136,33 @@ function detects that orphaned state and re-attaches the hooks."
   (when (and (bound-and-true-p trailing-newline-indicator-mode)
              (not (memq #'trailing-newline-indicator--update-indicator after-change-functions)))
     (trailing-newline-indicator--setup-hooks)))
+
+(defun trailing-newline-indicator--setup-hooks ()
+  "Setup necessary hooks for trailing newline indicator."
+  (unless (memq #'trailing-newline-indicator--restore-hooks
+                (default-value 'after-change-major-mode-hook))
+    (add-hook 'after-change-major-mode-hook #'trailing-newline-indicator--restore-hooks))
+  (add-hook 'kill-buffer-hook #'trailing-newline-indicator--on-kill-buffer nil t)
+  (let ((update-fn #'trailing-newline-indicator--update-indicator))
+    (dolist (hook (trailing-newline-indicator--hook-list))
+      (add-hook hook update-fn nil t))))
+
+(defun trailing-newline-indicator--cleanup-hooks ()
+  "Remove hooks used by trailing-newline-indicator."
+  (remove-hook 'kill-buffer-hook #'trailing-newline-indicator--on-kill-buffer t)
+  (let ((update-fn #'trailing-newline-indicator--update-indicator))
+    (dolist (hook (trailing-newline-indicator--hook-list))
+      (remove-hook hook update-fn t)))
+  (when (= trailing-newline-indicator--active-count 0)
+    (remove-hook 'after-change-major-mode-hook #'trailing-newline-indicator--restore-hooks)))
+
+(defun trailing-newline-indicator--increment-count ()
+  "Increment the global counter of buffers with mode enabled."
+  (setq trailing-newline-indicator--active-count (1+ trailing-newline-indicator--active-count)))
+
+(defun trailing-newline-indicator--decrement-count ()
+  "Decrement the global counter of buffers with mode enabled."
+  (setq trailing-newline-indicator--active-count (max 0 (1- trailing-newline-indicator--active-count))))
 
 ;;; Minor Mode Definition and Activation:
 ;;;###autoload
@@ -166,13 +178,15 @@ newline."
                (> trailing-newline-indicator-mode 0)))
 
       (unless trailing-newline-indicator--overlay
-        (unless (memq #'trailing-newline-indicator--restore-hooks
-                      (default-value 'after-change-major-mode-hook))
-          (add-hook 'after-change-major-mode-hook #'trailing-newline-indicator--restore-hooks))
-        (trailing-newline-indicator--setup-hooks))
+        (trailing-newline-indicator--increment-count)
+        (trailing-newline-indicator--setup-hooks)
+        (trailing-newline-indicator--update-indicator))
 
-    (trailing-newline-indicator--delete-overlay)
-    (trailing-newline-indicator--cleanup-hooks)))
+    (when (or trailing-newline-indicator--overlay
+              (memq #'trailing-newline-indicator--on-kill-buffer kill-buffer-hook))
+      (trailing-newline-indicator--delete-overlay)
+      (trailing-newline-indicator--decrement-count)
+      (trailing-newline-indicator--cleanup-hooks))))
 
 (defun trailing-newline-indicator--is-buffer-suitable-for-indicator-p ()
   "Return non-nil if the current buffer is suitable for the indicator.
