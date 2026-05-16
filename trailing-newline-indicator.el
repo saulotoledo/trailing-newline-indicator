@@ -14,7 +14,7 @@
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;; Author: Saulo S. de Toledo <saulotoledo@gmail.com>
-;; Version: 0.3.6
+;; Version: 0.3.7
 ;; Package-Requires: ((emacs "26.1"))
 ;; Keywords: convenience, display, editing
 ;; URL: https://github.com/saulotoledo/trailing-newline-indicator
@@ -90,27 +90,28 @@
 (defun trailing-newline-indicator--update-indicator (&rest _)
   "Update the trailing newline indicator overlay in the current buffer.
 Removes any existing overlay, and if the buffer ends with a newline,
-adds an indicator in the left margin for the visual empty line."
+adds a ghost text indicator at the end of the buffer."
   (trailing-newline-indicator--delete-overlay)
   (when (and (eq (char-before (point-max)) ?\n)
              (not (eq (point-min) (point-max))))
-    (save-excursion
-      (goto-char (1- (point-max)))
-      (let* ((ov (make-overlay (point-max) (point-max)))
-             (line (line-number-at-pos (1- (point-max))))
-             (nl-symbol (propertize trailing-newline-indicator-newline-symbol 'face 'line-number))
-             (indicator-text
-              (if (and trailing-newline-indicator-show-line-number
-                       (bound-and-true-p display-line-numbers))
-                  (let ((small-num
-                         (propertize (format " %d" (1+ line))
-                                     'face 'trailing-newline-indicator-small-number)))
-                    (concat nl-symbol small-num))
-                nl-symbol)))
-        (overlay-put ov 'after-string
-                     (propertize "\u200b"
-                                 'display `(margin left-margin ,indicator-text)))
-        (setq trailing-newline-indicator--overlay ov)))))
+    (let* ((ov (make-overlay (point-max) (point-max)))
+           (line (line-number-at-pos (1- (point-max))))
+           (nl-symbol (propertize trailing-newline-indicator-newline-symbol 'face 'line-number))
+           (indicator-text
+            (if (and trailing-newline-indicator-show-line-number
+                     (bound-and-true-p display-line-numbers))
+                (let ((small-num
+                       (propertize (format " %d" (1+ line))
+                                   'face 'trailing-newline-indicator-small-number)))
+                  (concat nl-symbol small-num))
+              nl-symbol)))
+      ;; `cursor t' on the first character makes the block cursor appear ON
+      ;; the symbol when point is at (point-max), matching the look of
+      ;; inline-completion ghost text instead of a solid block before it.
+      (add-text-properties 0 1 '(cursor t) indicator-text)
+      (overlay-put ov 'before-string indicator-text)
+      (overlay-put ov 'priority 100)
+      (setq trailing-newline-indicator--overlay ov))))
 
 ;;; Control Hooks Setup:
 (defun trailing-newline-indicator--hook-list ()
