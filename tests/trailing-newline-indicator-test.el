@@ -203,6 +203,17 @@ This happens regardless of `display-line-numbers'."
       (trailing-newline-indicator-mode 1)
       (should (equal "⏎" (substring-no-properties (tnli-test--before-string)))))))
 
+(ert-deftest tnli/skips-line-number-at-pos-when-line-numbers-hidden ()
+  "`line-number-at-pos' is not called when line numbers are not shown."
+  (tnli-test--with-buffer "line1\nline2\n"
+    (let ((called nil)
+          (trailing-newline-indicator-show-line-number nil)
+          (display-line-numbers t))
+      (cl-letf (((symbol-function 'line-number-at-pos)
+                 (lambda (&rest _) (setq called t) 1)))
+        (trailing-newline-indicator-mode 1)
+        (should-not called)))))
+
 (ert-deftest tnli/line-number-value-is-one-plus-last-line ()
   "The displayed line number equals one past the last line."
   (tnli-test--with-buffer "a\nb\nc\n"
@@ -425,6 +436,68 @@ It also does not increment the active-count."
     (insert "\n")
     (trailing-newline-indicator--update-indicator)
     (should (overlayp trailing-newline-indicator--overlay))))
+
+;;; Narrowing
+
+(ert-deftest tnli/no-overlay-when-narrowed-before-eof ()
+  "No overlay is shown when buffer is narrowed before the real end of buffer."
+  (tnli-test--with-buffer "line1\nline2\nline3\n"
+    (narrow-to-region 7 13) ; "line2\n"
+    (trailing-newline-indicator-mode 1)
+    (should-not trailing-newline-indicator--overlay)
+    (widen)
+    (trailing-newline-indicator--update-indicator)
+    (should (overlayp trailing-newline-indicator--overlay))
+    (should (= (overlay-start trailing-newline-indicator--overlay) (point-max)))))
+
+(ert-deftest tnli/narrowed-to-eof-respects-display-line-numbers-widen ()
+  "When narrowed to EOF, line number respects `display-line-numbers-widen'."
+  (tnli-test--with-buffer "line1\nline2\nline3\n"
+    (narrow-to-region 13 (point-max)) ; "line3\n"
+    (let ((trailing-newline-indicator-newline-symbol "⏎")
+          (trailing-newline-indicator-show-line-number t)
+          (display-line-numbers t)
+          (display-line-numbers-widen nil))
+      (trailing-newline-indicator-mode 1)
+      (should (equal "⏎ 2" (substring-no-properties (tnli-test--before-string))))
+      (setq display-line-numbers-widen t)
+      (trailing-newline-indicator--update-indicator)
+      (should (equal "⏎ 4" (substring-no-properties (tnli-test--before-string)))))))
+
+(ert-deftest tnli/delete-overlay-cleans-eof-orphan-while-narrowed ()
+  "Orphaned overlay at real EOF is cleaned up even while narrowed mid-file."
+  (tnli-test--with-buffer "line1\nline2\nline3\n"
+    (let ((orphan-ov (make-overlay (point-max) (point-max))))
+      (overlay-put orphan-ov 'trailing-newline-indicator t)
+      (narrow-to-region 1 7)
+      (trailing-newline-indicator--delete-overlay)
+      (should-not (overlay-buffer orphan-ov)))))
+
+(ert-deftest tnli/no-overlay-when-narrowed-to-empty-region-at-eof ()
+  "No overlay when narrowed to a zero-width region at EOF.
+Ensures `(not (eq (point-min) visible-max))' is preserved so the indicator
+is hidden when the preceding newline is outside the narrowed view."
+  (tnli-test--with-buffer "line1\nline2\n"
+    (narrow-to-region (point-max) (point-max))
+    (trailing-newline-indicator-mode 1)
+    (should-not trailing-newline-indicator--overlay)))
+
+(ert-deftest tnli/narrow-and-widen-update-via-post-command-hook ()
+  "Narrowing and widening update the indicator via `post-command-hook'.
+Emacs does not run `after-change-functions' on `narrow-to-region' or `widen'
+because buffer text does not change.  This test guards that `post-command-hook'
+(or an explicit replacement) keeps the indicator in sync across restriction
+changes."
+  (tnli-test--with-buffer "line1\nline2\nline3\n"
+    (trailing-newline-indicator-mode 1)
+    (should (overlayp trailing-newline-indicator--overlay))
+    (narrow-to-region 1 13) ; before real EOF; after-change-functions does NOT run
+    (run-hooks 'post-command-hook)
+    (should-not trailing-newline-indicator--overlay)
+    (widen) ; after-change-functions does NOT run
+    (run-hooks 'post-command-hook)
+    (should (overlayp trailing-newline-indicator--overlay))
+    (should (= (overlay-start trailing-newline-indicator--overlay) (point-max)))))
 
 ;;; Buffer suitability
 
