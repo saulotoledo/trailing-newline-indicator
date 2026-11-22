@@ -244,6 +244,40 @@ This happens regardless of `display-line-numbers'."
     (trailing-newline-indicator--delete-overlay)
     (should-not trailing-newline-indicator--overlay)))
 
+(ert-deftest tnli/overlay-has-identifying-property ()
+  "The indicator overlay carries the `trailing-newline-indicator' property."
+  (tnli-test--with-buffer "line1\n"
+    (trailing-newline-indicator-mode 1)
+    (should (eq t (overlay-get trailing-newline-indicator--overlay
+                               'trailing-newline-indicator)))))
+
+(ert-deftest tnli/preserves-other-overlays-at-point-max ()
+  "Updating or disabling the mode does not delete foreign overlays at (point-max)."
+  (tnli-test--with-buffer "line1\n"
+    (let ((foreign-ov (make-overlay (point-max) (point-max))))
+      (overlay-put foreign-ov 'foreign-package t)
+      (trailing-newline-indicator-mode 1)
+      (trailing-newline-indicator--update-indicator)
+      (should (overlay-buffer foreign-ov))
+      (trailing-newline-indicator--delete-overlay)
+      (should (overlay-buffer foreign-ov))
+      (trailing-newline-indicator-mode -1)
+      (should (overlay-buffer foreign-ov))
+      (delete-overlay foreign-ov))))
+
+(ert-deftest tnli/delete-overlay-removes-orphaned-indicator-overlays ()
+  "Orphaned overlays tagged `trailing-newline-indicator' at EOF are cleaned up."
+  (tnli-test--with-buffer "line1\n"
+    (let ((orphan-ov  (make-overlay (point-max) (point-max)))
+          (foreign-ov (make-overlay (point-max) (point-max))))
+      (overlay-put orphan-ov  'trailing-newline-indicator t)
+      (overlay-put foreign-ov 'foreign-package t)
+      (setq trailing-newline-indicator--overlay nil)
+      (trailing-newline-indicator--delete-overlay)
+      (should-not (overlay-buffer orphan-ov))
+      (should (overlay-buffer foreign-ov))
+      (delete-overlay foreign-ov))))
+
 (ert-deftest tnli/enable-is-idempotent ()
   "Enabling an already-enabled mode does not create a second overlay.
 It also does not increment the active-count."
