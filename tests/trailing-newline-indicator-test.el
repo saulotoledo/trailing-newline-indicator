@@ -273,6 +273,82 @@ This happens regardless of `display-line-numbers'."
       (trailing-newline-indicator-mode -1)
       (should (= (1- after-enable) trailing-newline-indicator--active-count)))))
 
+(ert-deftest tnli/active-count-no-double-increment-without-trailing-newline ()
+  "Re-enabling the mode without a trailing newline does not double-increment count."
+  (let ((trailing-newline-indicator--active-count 0))
+    (tnli-test--with-buffer "no-trailing-newline"
+      (trailing-newline-indicator-mode 1)
+      (should (= 1 trailing-newline-indicator--active-count))
+      (trailing-newline-indicator-mode 1)
+      (should (= 1 trailing-newline-indicator--active-count))
+      (trailing-newline-indicator-mode -1)
+      (should (= 0 trailing-newline-indicator--active-count)))))
+
+(ert-deftest tnli/active-count-no-double-increment-after-newline-deleted ()
+  "Deleting trailing newline then re-enabling does not double-increment count."
+  (let ((trailing-newline-indicator--active-count 0))
+    (tnli-test--with-buffer "line1\n"
+      (trailing-newline-indicator-mode 1)
+      (should (= 1 trailing-newline-indicator--active-count))
+      (goto-char (point-max))
+      (delete-char -1)
+      (should-not trailing-newline-indicator--overlay)
+      (trailing-newline-indicator-mode 1)
+      (should (= 1 trailing-newline-indicator--active-count))
+      (trailing-newline-indicator-mode -1)
+      (should (= 0 trailing-newline-indicator--active-count)))))
+
+(ert-deftest tnli/disable-is-idempotent ()
+  "Disabling an already-disabled mode does not decrement active-count again."
+  (let ((trailing-newline-indicator--active-count 1))
+    (tnli-test--with-buffer "line1\n"
+      (trailing-newline-indicator-mode 1)
+      (should (= 2 trailing-newline-indicator--active-count))
+      (trailing-newline-indicator-mode -1)
+      (should (= 1 trailing-newline-indicator--active-count))
+      (trailing-newline-indicator-mode -1)
+      (should (= 1 trailing-newline-indicator--active-count)))))
+
+(ert-deftest tnli/major-mode-hook-removed-when-active-count-reaches-zero ()
+  "Global `after-change-major-mode-hook' entry is removed when count hits zero."
+  (let ((trailing-newline-indicator--active-count 0)
+        (after-change-major-mode-hook nil))
+    (tnli-test--with-buffer "no-trailing-newline"
+      (trailing-newline-indicator-mode 1)
+      (trailing-newline-indicator-mode 1)
+      (should (memq #'trailing-newline-indicator--restore-hooks
+                    (default-value 'after-change-major-mode-hook)))
+      (trailing-newline-indicator-mode -1)
+      (should (= 0 trailing-newline-indicator--active-count))
+      (should-not (memq #'trailing-newline-indicator--restore-hooks
+                        (default-value 'after-change-major-mode-hook))))))
+
+(ert-deftest tnli/disable-cleans-up-after-hooks-cleared ()
+  "Disabling still decrements count and removes overlay if hooks were cleared."
+  (let ((trailing-newline-indicator--active-count 0)
+        (after-change-major-mode-hook nil))
+    (tnli-test--with-buffer "line1\n"
+      (trailing-newline-indicator-mode 1)
+      (should (= 1 trailing-newline-indicator--active-count))
+      (should trailing-newline-indicator--overlay)
+      (setq-local kill-buffer-hook nil)
+      (trailing-newline-indicator-mode -1)
+      (should (= 0 trailing-newline-indicator--active-count))
+      (should-not trailing-newline-indicator--overlay)
+      (should-not (memq #'trailing-newline-indicator--restore-hooks
+                        (default-value 'after-change-major-mode-hook))))))
+
+(ert-deftest tnli/reenable-after-hooks-cleared-does-not-double-increment ()
+  "Re-enabling after hooks were cleared restores hooks without double-counting."
+  (let ((trailing-newline-indicator--active-count 0))
+    (tnli-test--with-buffer "no-trailing-newline"
+      (trailing-newline-indicator-mode 1)
+      (should (= 1 trailing-newline-indicator--active-count))
+      (setq-local kill-buffer-hook nil)
+      (trailing-newline-indicator-mode 1)
+      (should (= 1 trailing-newline-indicator--active-count))
+      (should (memq #'trailing-newline-indicator--on-kill-buffer kill-buffer-hook)))))
+
 ;;; Overlay management helpers
 
 (ert-deftest tnli/delete-overlay-nils-variable ()
