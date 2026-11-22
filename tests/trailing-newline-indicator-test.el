@@ -32,6 +32,7 @@
 
 (require 'ert)
 (require 'display-line-numbers) ; ensure display-line-numbers is defvar'd as special
+(defvar display-line-numbers-offset) ; Emacs 27+; ensure dynamic binding on 26.x
 (require 'trailing-newline-indicator)
 
 ;;; Helpers
@@ -235,6 +236,99 @@ This happens regardless of `display-line-numbers'."
              (sym-len (length trailing-newline-indicator-newline-symbol)))
         (should (eq 'trailing-newline-indicator-small-number
                     (get-text-property sym-len 'face str)))))))
+
+(ert-deftest tnli/line-number-respects-display-line-numbers-offset ()
+  "Absolute line number includes `display-line-numbers-offset' and uses `abs'."
+  (tnli-test--with-buffer "a\nb\nc\n"
+    (let ((trailing-newline-indicator-newline-symbol "⏎")
+          (trailing-newline-indicator-show-line-number t)
+          (display-line-numbers t)
+          (display-line-numbers-offset 10))
+      (trailing-newline-indicator-mode 1)
+      (should (equal "⏎ 14" (substring-no-properties (tnli-test--before-string))))
+      (setq display-line-numbers-offset -10)
+      (trailing-newline-indicator--update-indicator)
+      (should (equal "⏎ 6" (substring-no-properties (tnli-test--before-string)))))))
+
+(ert-deftest tnli/relative-line-number-from-earlier-line ()
+  "In `relative' mode, line number shows distance from point to trailing line."
+  (tnli-test--with-buffer "a\nb\nc\n"
+    (let ((trailing-newline-indicator-newline-symbol "⏎")
+          (trailing-newline-indicator-show-line-number t)
+          (display-line-numbers 'relative))
+      (goto-char (point-min)) ; line 1 -> EOF is line 4 (distance 3)
+      (trailing-newline-indicator-mode 1)
+      (should (equal "⏎ 3" (substring-no-properties (tnli-test--before-string))))
+      (forward-line 2) ; line 3 -> distance 1
+      (trailing-newline-indicator--update-indicator)
+      (should (equal "⏎ 1" (substring-no-properties (tnli-test--before-string)))))))
+
+(ert-deftest tnli/relative-line-number-at-eof-respects-current-absolute ()
+  "At EOF in `relative' mode, number respects `current-absolute' and ignores offset."
+  (tnli-test--with-buffer "a\nb\nc\n"
+    (let ((trailing-newline-indicator-newline-symbol "⏎")
+          (trailing-newline-indicator-show-line-number t)
+          (display-line-numbers 'relative)
+          (display-line-numbers-current-absolute t)
+          (display-line-numbers-offset 5))
+      (goto-char (point-max))
+      (trailing-newline-indicator-mode 1)
+      (should (equal "⏎ 4" (substring-no-properties (tnli-test--before-string))))
+      (narrow-to-region 5 (point-max)) ; "c\n" -> offset must NOT force widening
+      (let ((display-line-numbers-widen nil))
+        (trailing-newline-indicator--update-indicator)
+        (should (equal "⏎ 2" (substring-no-properties (tnli-test--before-string)))))
+      (widen)
+      (setq display-line-numbers-current-absolute nil)
+      (trailing-newline-indicator--update-indicator)
+      (should (equal "⏎ 0" (substring-no-properties (tnli-test--before-string)))))))
+
+(ert-deftest tnli/visual-line-numbers-omits-line-number ()
+  "In `visual' mode, no line number is displayed (symbol only)."
+  (tnli-test--with-buffer "a\nb\nc\n"
+    (let ((trailing-newline-indicator-newline-symbol "⏎")
+          (trailing-newline-indicator-show-line-number t)
+          (display-line-numbers 'visual))
+      (trailing-newline-indicator-mode 1)
+      (should (equal "⏎" (substring-no-properties (tnli-test--before-string))))))
+  (tnli-test--with-buffer "a\nb\nc\n"
+    (let ((trailing-newline-indicator-newline-symbol "")
+          (trailing-newline-indicator-show-line-number t)
+          (display-line-numbers 'visual))
+      (trailing-newline-indicator-mode 1)
+      (should-not trailing-newline-indicator--overlay))))
+
+(ert-deftest tnli/offset-forces-widened-line-number-when-narrowed ()
+  "Non-zero `display-line-numbers-offset' counts from buffer start even if widen is nil."
+  (tnli-test--with-buffer "line1\nline2\nline3\n"
+    (narrow-to-region 13 (point-max)) ; "line3\n" (line 3 of full buffer -> EOF is 4)
+    (let ((trailing-newline-indicator-newline-symbol "⏎")
+          (trailing-newline-indicator-show-line-number t)
+          (display-line-numbers t)
+          (display-line-numbers-widen nil)
+          (display-line-numbers-offset 10))
+      (trailing-newline-indicator-mode 1)
+      (should (equal "⏎ 14" (substring-no-properties (tnli-test--before-string)))))))
+
+(ert-deftest tnli/non-t-truthy-display-line-numbers-treated-as-absolute ()
+  "Any non-nil `display-line-numbers' other than `relative'/`visual' is absolute."
+  (tnli-test--with-buffer "a\nb\nc\n"
+    (let ((trailing-newline-indicator-newline-symbol "⏎")
+          (trailing-newline-indicator-show-line-number t)
+          (display-line-numbers 'absolute))
+      (trailing-newline-indicator-mode 1)
+      (should (equal "⏎ 4" (substring-no-properties (tnli-test--before-string)))))))
+
+(ert-deftest tnli/skips-line-number-at-pos-in-visual-mode ()
+  "`line-number-at-pos' is not called in `visual' mode."
+  (tnli-test--with-buffer "line1\nline2\n"
+    (let ((called nil)
+          (trailing-newline-indicator-show-line-number t)
+          (display-line-numbers 'visual))
+      (cl-letf (((symbol-function 'line-number-at-pos)
+                 (lambda (&rest _) (setq called t) 1)))
+        (trailing-newline-indicator-mode 1)
+        (should-not called)))))
 
 ;;; Hooks
 
