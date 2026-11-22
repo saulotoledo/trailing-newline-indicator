@@ -88,30 +88,37 @@
   (when (overlayp trailing-newline-indicator--overlay)
     (delete-overlay trailing-newline-indicator--overlay)
     (setq trailing-newline-indicator--overlay nil))
-  (remove-overlays (max (point-min) (1- (point-max)))
-                   (point-max)
-                   'trailing-newline-indicator
-                   t))
+  (save-restriction
+    (widen)
+    (remove-overlays (max (point-min) (1- (point-max)))
+                     (point-max)
+                     'trailing-newline-indicator
+                     t)))
 
 (defun trailing-newline-indicator--update-indicator (&rest _)
   "Update the trailing newline indicator overlay in the current buffer.
 Removes any existing overlay, and if the buffer ends with a newline,
 adds a ghost text indicator at the end of the buffer."
   (trailing-newline-indicator--delete-overlay)
-  (let ((show-indicator (> (length trailing-newline-indicator-newline-symbol) 0))
-        (show-line-num (and trailing-newline-indicator-show-line-number
-                            (bound-and-true-p display-line-numbers))))
-    (when (and (or show-indicator show-line-num)
-               (eq (char-before (point-max)) ?\n)
-               (not (eq (point-min) (point-max))))
-      (let* ((ov (make-overlay (point-max) (point-max) nil t t))
-             (line (line-number-at-pos (1- (point-max))))
+  (let* ((visible-max (point-max))
+         (real-eof (save-restriction (widen) (point-max)))
+         (show-indicator (> (length trailing-newline-indicator-newline-symbol) 0))
+         (show-line-num (and trailing-newline-indicator-show-line-number
+                             (bound-and-true-p display-line-numbers))))
+    (when (and (= visible-max real-eof)
+               (or show-indicator show-line-num)
+               (eq (char-before visible-max) ?\n)
+               (not (eq (point-min) visible-max)))
+      (let* ((ov (make-overlay visible-max visible-max nil t t))
              (nl-symbol (propertize trailing-newline-indicator-newline-symbol 'face 'line-number))
              (indicator-text
               (if show-line-num
-                  (let ((small-num
-                         (propertize (format (if show-indicator " %d" "%d") (1+ line))
-                                     'face 'trailing-newline-indicator-small-number)))
+                  (let* ((line (line-number-at-pos
+                                (1- visible-max)
+                                (bound-and-true-p display-line-numbers-widen)))
+                         (small-num
+                          (propertize (format (if show-indicator " %d" "%d") (1+ line))
+                                      'face 'trailing-newline-indicator-small-number)))
                     (concat nl-symbol small-num))
                 nl-symbol)))
         ;; `cursor t' on the first character makes the block cursor appear ON
