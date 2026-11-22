@@ -94,27 +94,30 @@
 Removes any existing overlay, and if the buffer ends with a newline,
 adds a ghost text indicator at the end of the buffer."
   (trailing-newline-indicator--delete-overlay)
-  (when (and (eq (char-before (point-max)) ?\n)
-             (not (eq (point-min) (point-max))))
-    (let* ((ov (make-overlay (point-max) (point-max)))
-           (line (line-number-at-pos (1- (point-max))))
-           (nl-symbol (propertize trailing-newline-indicator-newline-symbol 'face 'line-number))
-           (indicator-text
-            (if (and trailing-newline-indicator-show-line-number
-                     (bound-and-true-p display-line-numbers))
-                (let ((small-num
-                       (propertize (format " %d" (1+ line))
-                                   'face 'trailing-newline-indicator-small-number)))
-                  (concat nl-symbol small-num))
-              nl-symbol)))
-      ;; `cursor t' on the first character makes the block cursor appear ON
-      ;; the symbol when point is at (point-max), matching the look of
-      ;; inline-completion ghost text instead of a solid block before it.
-      (add-text-properties 0 1 '(cursor t) indicator-text)
-      (overlay-put ov 'trailing-newline-indicator t)
-      (overlay-put ov 'before-string indicator-text)
-      (overlay-put ov 'priority 100)
-      (setq trailing-newline-indicator--overlay ov))))
+  (let ((show-indicator (> (length trailing-newline-indicator-newline-symbol) 0))
+        (show-line-num (and trailing-newline-indicator-show-line-number
+                            (bound-and-true-p display-line-numbers))))
+    (when (and (or show-indicator show-line-num)
+               (eq (char-before (point-max)) ?\n)
+               (not (eq (point-min) (point-max))))
+      (let* ((ov (make-overlay (point-max) (point-max) nil t t))
+             (line (line-number-at-pos (1- (point-max))))
+             (nl-symbol (propertize trailing-newline-indicator-newline-symbol 'face 'line-number))
+             (indicator-text
+              (if show-line-num
+                  (let ((small-num
+                         (propertize (format (if show-indicator " %d" "%d") (1+ line))
+                                     'face 'trailing-newline-indicator-small-number)))
+                    (concat nl-symbol small-num))
+                nl-symbol)))
+        ;; `cursor t' on the first character makes the block cursor appear ON
+        ;; the symbol when point is at (point-max), matching the look of
+        ;; inline-completion ghost text instead of a solid block before it.
+        (add-text-properties 0 1 '(cursor t) indicator-text)
+        (overlay-put ov 'trailing-newline-indicator t)
+        (overlay-put ov 'before-string indicator-text)
+        (overlay-put ov 'priority 100)
+        (setq trailing-newline-indicator--overlay ov)))))
 
 ;;; Control Hooks Setup:
 (defun trailing-newline-indicator--hook-list ()
