@@ -95,6 +95,36 @@
                      'trailing-newline-indicator
                      t)))
 
+(defun trailing-newline-indicator--line-number (visible-max)
+  "Return the trailing newline line number at VISIBLE-MAX, or nil.
+Respects `display-line-numbers' (absolute and `relative'),
+`display-line-numbers-widen', `display-line-numbers-offset', and
+`display-line-numbers-current-absolute'.  Returns nil for `visual'
+because visual line counts depend on window width."
+  (let ((style (bound-and-true-p display-line-numbers))
+        (widen (bound-and-true-p display-line-numbers-widen)))
+    (cond
+     ;; Disabled or visual (window-width dependent): no line number.
+     ((or (null style) (eq style 'visual))
+      nil)
+     ;; Relative mode with point on the trailing line itself.
+     ((and (eq style 'relative) (= (point) visible-max))
+      (if (bound-and-true-p display-line-numbers-current-absolute)
+          (1+ (line-number-at-pos (1- visible-max) widen))
+        0))
+     ;; Relative mode with point on an earlier line.
+     ((eq style 'relative)
+      (let ((eof-line (1+ (line-number-at-pos (1- visible-max))))
+            (cur-line (line-number-at-pos (point))))
+        (- eof-line cur-line)))
+     ;; Absolute mode (any other non-nil value of `display-line-numbers').
+     (t
+      (let* ((raw-offset (bound-and-true-p display-line-numbers-offset))
+             (offset (if (integerp raw-offset) raw-offset 0))
+             (effective-widen (or widen (not (zerop offset)))))
+        (abs (+ (1+ (line-number-at-pos (1- visible-max) effective-widen))
+                offset)))))))
+
 (defun trailing-newline-indicator--update-indicator (&rest _)
   "Update the trailing newline indicator overlay in the current buffer.
 Removes any existing overlay, and if the buffer ends with a newline,
@@ -103,8 +133,10 @@ adds a ghost text indicator at the end of the buffer."
   (let* ((visible-max (point-max))
          (real-eof (save-restriction (widen) (point-max)))
          (show-indicator (> (length trailing-newline-indicator-newline-symbol) 0))
+         (style (bound-and-true-p display-line-numbers))
          (show-line-num (and trailing-newline-indicator-show-line-number
-                             (bound-and-true-p display-line-numbers))))
+                             style
+                             (not (eq style 'visual)))))
     (when (and (= visible-max real-eof)
                (or show-indicator show-line-num)
                (eq (char-before visible-max) ?\n)
@@ -113,11 +145,9 @@ adds a ghost text indicator at the end of the buffer."
              (nl-symbol (propertize trailing-newline-indicator-newline-symbol 'face 'line-number))
              (indicator-text
               (if show-line-num
-                  (let* ((line (line-number-at-pos
-                                (1- visible-max)
-                                (bound-and-true-p display-line-numbers-widen)))
+                  (let* ((line-num (trailing-newline-indicator--line-number visible-max))
                          (small-num
-                          (propertize (format (if show-indicator " %d" "%d") (1+ line))
+                          (propertize (format (if show-indicator " %d" "%d") line-num)
                                       'face 'trailing-newline-indicator-small-number)))
                     (concat nl-symbol small-num))
                 nl-symbol)))
