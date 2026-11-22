@@ -603,8 +603,10 @@ changes."
 (ert-deftest tnli/buffer-with-mode-already-on-is-not-suitable ()
   "A buffer where the mode is already active is not re-enabled by the global mode."
   (tnli-test--with-buffer "line1\n"
-    (setq-local trailing-newline-indicator-mode t)
-    (should-not (trailing-newline-indicator--is-buffer-suitable-for-indicator-p))))
+    (let ((buffer-file-name "/tmp/tnli-test-file.txt"))
+      (should (trailing-newline-indicator--is-buffer-suitable-for-indicator-p))
+      (setq-local trailing-newline-indicator-mode t)
+      (should-not (trailing-newline-indicator--is-buffer-suitable-for-indicator-p)))))
 
 (provide 'trailing-newline-indicator-test)
 ;;; trailing-newline-indicator-test.el ends here
