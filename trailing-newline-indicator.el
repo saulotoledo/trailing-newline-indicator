@@ -79,12 +79,16 @@
 (defvar-local trailing-newline-indicator--overlay nil
   "Overlay used to display the trailing newline ghost-text indicator.")
 
+(defvar-local trailing-newline-indicator--last-state nil
+  "Cached buffer state from the last indicator update.")
+
 (put 'trailing-newline-indicator--active 'permanent-local t)
 (put 'trailing-newline-indicator--overlay 'permanent-local t)
 
 ;;; Overlay Management:
 (defun trailing-newline-indicator--delete-overlay ()
   "Delete the trailing newline indicator overlay in the current buffer."
+  (setq trailing-newline-indicator--last-state nil)
   (when (overlayp trailing-newline-indicator--overlay)
     (delete-overlay trailing-newline-indicator--overlay)
     (setq trailing-newline-indicator--overlay nil))
@@ -125,40 +129,80 @@ because visual line counts depend on window width."
         (abs (+ (1+ (line-number-at-pos (1- visible-max) effective-widen))
                 offset)))))))
 
+(defun trailing-newline-indicator--current-state (visible-max style)
+  "Return a state key capturing all inputs affecting the indicator.
+VISIBLE-MAX is `(point-max)' and STYLE is `display-line-numbers'."
+  (list (buffer-chars-modified-tick)
+        (point-min)
+        visible-max
+        trailing-newline-indicator-newline-symbol
+        trailing-newline-indicator-show-line-number
+        style
+        (bound-and-true-p display-line-numbers-widen)
+        (bound-and-true-p display-line-numbers-offset)
+        (bound-and-true-p display-line-numbers-current-absolute)
+        (when (and trailing-newline-indicator-show-line-number
+                   (eq style 'relative)
+                   (eq (char-before visible-max) ?\n))
+          (line-beginning-position))))
+
+(defun trailing-newline-indicator--build-text (visible-max style)
+  "Build the propertized indicator string at VISIBLE-MAX for STYLE, or nil."
+  (let ((show-indicator (> (length trailing-newline-indicator-newline-symbol) 0))
+        (show-line-num (and trailing-newline-indicator-show-line-number
+                            style
+                            (not (eq style 'visual)))))
+    (when (and (or show-indicator show-line-num)
+               (eq (char-before visible-max) ?\n)
+               (not (eq (point-min) visible-max))
+               (= visible-max (save-restriction (widen) (point-max))))
+      (let* ((nl-symbol (propertize trailing-newline-indicator-newline-symbol
+                                    'face 'line-number))
+             (text (if show-line-num
+                       (concat nl-symbol
+                               (propertize
+                                (format (if show-indicator " %d" "%d")
+                                        (trailing-newline-indicator--line-number visible-max))
+                                'face 'trailing-newline-indicator-small-number))
+                     nl-symbol)))
+        ;; `cursor t' on the first character makes the block cursor appear ON
+        ;; the symbol when point is at (point-max), matching inline ghost text.
+        (add-text-properties 0 1 '(cursor t) text)
+        text))))
+
+(defun trailing-newline-indicator--ensure-overlay (pos text)
+  "Place or reuse the indicator overlay at POS displaying TEXT."
+  (let ((ov trailing-newline-indicator--overlay))
+    (if (and (overlayp ov) (eq (overlay-buffer ov) (current-buffer)))
+        (unless (and (= (overlay-start ov) pos) (= (overlay-end ov) pos))
+          (move-overlay ov pos pos))
+      (remove-overlays (max (point-min) (1- pos)) pos 'trailing-newline-indicator t)
+      (setq ov (make-overlay pos pos nil t t))
+      (overlay-put ov 'trailing-newline-indicator t)
+      (overlay-put ov 'priority 100)
+      (setq trailing-newline-indicator--overlay ov))
+    (overlay-put ov 'before-string text)))
+
 (defun trailing-newline-indicator--update-indicator (&rest _)
   "Update the trailing newline indicator overlay in the current buffer.
-Removes any existing overlay, and if the buffer ends with a newline,
-adds a ghost text indicator at the end of the buffer."
-  (trailing-newline-indicator--delete-overlay)
+Skips work when buffer state is unchanged, and reuses the existing
+overlay in place when updating."
   (let* ((visible-max (point-max))
-         (real-eof (save-restriction (widen) (point-max)))
-         (show-indicator (> (length trailing-newline-indicator-newline-symbol) 0))
          (style (bound-and-true-p display-line-numbers))
-         (show-line-num (and trailing-newline-indicator-show-line-number
-                             style
-                             (not (eq style 'visual)))))
-    (when (and (= visible-max real-eof)
-               (or show-indicator show-line-num)
-               (eq (char-before visible-max) ?\n)
-               (not (eq (point-min) visible-max)))
-      (let* ((ov (make-overlay visible-max visible-max nil t t))
-             (nl-symbol (propertize trailing-newline-indicator-newline-symbol 'face 'line-number))
-             (indicator-text
-              (if show-line-num
-                  (let* ((line-num (trailing-newline-indicator--line-number visible-max))
-                         (small-num
-                          (propertize (format (if show-indicator " %d" "%d") line-num)
-                                      'face 'trailing-newline-indicator-small-number)))
-                    (concat nl-symbol small-num))
-                nl-symbol)))
-        ;; `cursor t' on the first character makes the block cursor appear ON
-        ;; the symbol when point is at (point-max), matching the look of
-        ;; inline-completion ghost text instead of a solid block before it.
-        (add-text-properties 0 1 '(cursor t) indicator-text)
-        (overlay-put ov 'trailing-newline-indicator t)
-        (overlay-put ov 'before-string indicator-text)
-        (overlay-put ov 'priority 100)
-        (setq trailing-newline-indicator--overlay ov)))))
+         (state (trailing-newline-indicator--current-state visible-max style))
+         (ov trailing-newline-indicator--overlay))
+    (unless (and (equal-including-properties state trailing-newline-indicator--last-state)
+                 (or (null ov)
+                     (and (overlayp ov)
+                          (eq (overlay-buffer ov) (current-buffer))
+                          (= (overlay-start ov) visible-max)
+                          (= (overlay-end ov) visible-max))))
+      (let ((text (trailing-newline-indicator--build-text visible-max style)))
+        (if text
+            (trailing-newline-indicator--ensure-overlay visible-max text)
+          (trailing-newline-indicator--delete-overlay)))
+      (setcar (nthcdr 3 state) (copy-sequence trailing-newline-indicator-newline-symbol))
+      (setq trailing-newline-indicator--last-state state))))
 
 ;;; Control Hooks Setup:
 (defun trailing-newline-indicator--hook-list ()

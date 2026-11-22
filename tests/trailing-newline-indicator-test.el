@@ -330,6 +330,170 @@ This happens regardless of `display-line-numbers'."
         (trailing-newline-indicator-mode 1)
         (should-not called)))))
 
+(ert-deftest tnli/update-skips-recalc-and-reuses-overlay-when-unchanged ()
+  "Repeated updates with unchanged state skip `line-number-at-pos' and keep overlay."
+  (tnli-test--with-buffer "line1\nline2\n"
+    (let ((trailing-newline-indicator-show-line-number t)
+          (display-line-numbers t))
+      (trailing-newline-indicator-mode 1)
+      (let ((ov-before trailing-newline-indicator--overlay)
+            (called nil))
+        (goto-char (point-min))
+        (cl-letf (((symbol-function 'line-number-at-pos)
+                   (lambda (&rest _) (setq called t) 1)))
+          (run-hooks 'post-command-hook)
+          (should-not called)
+          (should (eq ov-before trailing-newline-indicator--overlay)))))))
+
+(ert-deftest tnli/update-reuses-overlay-in-place-on-buffer-edit ()
+  "Editing the buffer moves and updates the existing overlay in place."
+  (tnli-test--with-buffer "line1\n"
+    (let ((trailing-newline-indicator-newline-symbol "⏎")
+          (trailing-newline-indicator-show-line-number t)
+          (display-line-numbers t))
+      (trailing-newline-indicator-mode 1)
+      (let ((ov-before trailing-newline-indicator--overlay))
+        (goto-char (point-max))
+        (insert "line2\n")
+        (should (eq ov-before trailing-newline-indicator--overlay))
+        (should (= (overlay-start ov-before) (point-max)))
+        (should (equal "⏎ 3" (substring-no-properties (tnli-test--before-string))))))))
+
+(ert-deftest tnli/relative-mode-skips-recalc-on-same-line-move ()
+  "In `relative' mode, horizontal move on same line skips `line-number-at-pos'."
+  (tnli-test--with-buffer "abcdef\nline2\n"
+    (let ((trailing-newline-indicator-newline-symbol "⏎")
+          (trailing-newline-indicator-show-line-number t)
+          (display-line-numbers 'relative))
+      (goto-char (point-min))
+      (trailing-newline-indicator-mode 1)
+      (should (equal "⏎ 2" (substring-no-properties (tnli-test--before-string))))
+      (let ((called nil))
+        (forward-char 3) ; still on line 1
+        (cl-letf (((symbol-function 'line-number-at-pos)
+                   (lambda (&rest _) (setq called t) 1)))
+          (run-hooks 'post-command-hook)
+          (should-not called)))
+      (forward-line 1) ; now on line 2 -> distance 1
+      (run-hooks 'post-command-hook)
+      (should (equal "⏎ 1" (substring-no-properties (tnli-test--before-string)))))))
+
+(ert-deftest tnli/recovers-after-external-overlay-deletion-or-move ()
+  "External deletion or relocation of overlay is repaired even when state matches."
+  (tnli-test--with-buffer "line1\n"
+    (trailing-newline-indicator-mode 1)
+    (let ((ov trailing-newline-indicator--overlay))
+      (should (overlayp ov))
+      (move-overlay ov 1 1)
+      (run-hooks 'post-command-hook)
+      (should (= (overlay-start trailing-newline-indicator--overlay) (point-max)))
+      (delete-overlay trailing-newline-indicator--overlay)
+      (run-hooks 'post-command-hook)
+      (should (overlayp trailing-newline-indicator--overlay))
+      (should (eq (overlay-buffer trailing-newline-indicator--overlay) (current-buffer))))))
+
+(ert-deftest tnli/ensure-overlay-sweeps-orphan-on-creation ()
+  "Creating a new overlay sweeps any orphaned indicator overlay at EOF."
+  (tnli-test--with-buffer "line1\n"
+    (let ((orphan (make-overlay (point-max) (point-max))))
+      (overlay-put orphan 'trailing-newline-indicator t)
+      (trailing-newline-indicator-mode 1)
+      (should-not (overlay-buffer orphan))
+      (should (overlayp trailing-newline-indicator--overlay)))))
+
+(ert-deftest tnli/edit-then-post-command-hook-skips-duplicate-recalc ()
+  "Following an edit, `post-command-hook' hits cache and skips `line-number-at-pos'."
+  (tnli-test--with-buffer "line1\n"
+    (let ((trailing-newline-indicator-show-line-number t)
+          (display-line-numbers t))
+      (trailing-newline-indicator-mode 1)
+      (goto-char (point-max))
+      (insert "line2\n") ; triggers after-change-functions
+      (let ((called nil))
+        (cl-letf (((symbol-function 'line-number-at-pos)
+                   (lambda (&rest _) (setq called t) 1)))
+          (run-hooks 'post-command-hook)
+          (should-not called))))))
+
+(ert-deftest tnli/formatter-command-updates-line-number ()
+  "A command replacing buffer content updates the line number accurately.
+Covers both normal edits and edits with `inhibit-modification-hooks' non-nil."
+  (tnli-test--with-buffer "a\nb\n"
+    (let ((trailing-newline-indicator-newline-symbol "⏎")
+          (trailing-newline-indicator-show-line-number t)
+          (display-line-numbers t))
+      (trailing-newline-indicator-mode 1)
+      (should (equal "⏎ 3" (substring-no-properties (tnli-test--before-string))))
+      ;; Normal formatter replacing buffer with more lines.
+      (erase-buffer)
+      (insert "1\n2\n3\n4\n5\n")
+      (run-hooks 'post-command-hook)
+      (should (equal "⏎ 6" (substring-no-properties (tnli-test--before-string))))
+      ;; Formatter running with `inhibit-modification-hooks' t (skips after-change).
+      (let ((inhibit-modification-hooks t))
+        (erase-buffer)
+        (insert "only1\nonly2\n"))
+      (run-hooks 'post-command-hook)
+      (should (equal "⏎ 3" (substring-no-properties (tnli-test--before-string)))))))
+
+(ert-deftest tnli/formatter-removing-lines-updates-line-number-and-position ()
+  "A formatter removing lines lowers the line number and keeps overlay at EOF."
+  (tnli-test--with-buffer "1\n2\n3\n4\n5\n6\n"
+    (let ((trailing-newline-indicator-newline-symbol "⏎")
+          (trailing-newline-indicator-show-line-number t)
+          (display-line-numbers t))
+      (trailing-newline-indicator-mode 1)
+      (let ((ov trailing-newline-indicator--overlay))
+        (should (equal "⏎ 7" (substring-no-properties (tnli-test--before-string))))
+        ;; Remove lines 3..5 ("3\n4\n5\n") -> 3 lines left, EOF line is 4.
+        (goto-char (point-min))
+        (forward-line 2)
+        (delete-region (point) (progn (forward-line 3) (point)))
+        (run-hooks 'post-command-hook)
+        (should (eq ov trailing-newline-indicator--overlay))
+        (should (= (overlay-start ov) (point-max)))
+        (should (= (overlay-end   ov) (point-max)))
+        (should (equal "⏎ 4" (substring-no-properties (tnli-test--before-string))))))))
+
+(ert-deftest tnli/horizontal-modification-keeps-line-number-and-position ()
+  "Inserting/deleting characters on a line keeps line number and zero-width EOF overlay."
+  (tnli-test--with-buffer "foo\nbar\n"
+    (let ((trailing-newline-indicator-newline-symbol "⏎")
+          (trailing-newline-indicator-show-line-number t)
+          (display-line-numbers t))
+      (trailing-newline-indicator-mode 1)
+      (let ((ov trailing-newline-indicator--overlay))
+        (should (equal "⏎ 3" (substring-no-properties (tnli-test--before-string))))
+        ;; Expand line 1 horizontally.
+        (goto-char (point-min))
+        (insert "prefix-")
+        (run-hooks 'post-command-hook)
+        (should (eq ov trailing-newline-indicator--overlay))
+        (should (= (overlay-start ov) (point-max)))
+        (should (= (overlay-end   ov) (point-max)))
+        (should (equal "⏎ 3" (substring-no-properties (tnli-test--before-string))))
+        ;; Shrink line 2 horizontally.
+        (forward-line 1)
+        (delete-char 2)
+        (run-hooks 'post-command-hook)
+        (should (eq ov trailing-newline-indicator--overlay))
+        (should (= (overlay-start ov) (point-max)))
+        (should (= (overlay-end   ov) (point-max)))
+        (should (equal "⏎ 3" (substring-no-properties (tnli-test--before-string))))))))
+
+(ert-deftest tnli/symbol-text-property-change-invalidates-cache ()
+  "Changing text properties on the newline symbol invalidates the state cache."
+  (tnli-test--with-buffer "line1\n"
+    (let ((trailing-newline-indicator-newline-symbol "⏎")
+          (trailing-newline-indicator-show-line-number nil))
+      (trailing-newline-indicator-mode 1)
+      (should-not (get-text-property 0 'help-echo (tnli-test--before-string)))
+      (setq trailing-newline-indicator-newline-symbol
+            (propertize "⏎" 'help-echo "EOF newline"))
+      (run-hooks 'post-command-hook)
+      (should (equal "EOF newline"
+                     (get-text-property 0 'help-echo (tnli-test--before-string)))))))
+
 ;;; Hooks
 
 (ert-deftest tnli/hooks-installed-on-enable ()
