@@ -73,9 +73,13 @@
 (defvar trailing-newline-indicator--active-count 0
   "Number of buffers with `trailing-newline-indicator-mode' enabled.")
 
+(defvar-local trailing-newline-indicator--active nil
+  "Non-nil when buffer is counted in `trailing-newline-indicator--active-count'.")
+
 (defvar-local trailing-newline-indicator--overlay nil
   "Overlay used to display the trailing newline indicator in the margin.")
 
+(put 'trailing-newline-indicator--active 'permanent-local t)
 (put 'trailing-newline-indicator--overlay 'permanent-local t)
 
 ;;; Overlay Management:
@@ -183,14 +187,15 @@ newline."
   (if (or (eq trailing-newline-indicator-mode t)
           (and (numberp trailing-newline-indicator-mode)
                (> trailing-newline-indicator-mode 0)))
-
-      (unless trailing-newline-indicator--overlay
-        (trailing-newline-indicator--increment-count)
-        (trailing-newline-indicator--setup-hooks)
-        (trailing-newline-indicator--update-indicator))
-
-    (when (or trailing-newline-indicator--overlay
-              (memq #'trailing-newline-indicator--on-kill-buffer kill-buffer-hook))
+      (progn
+        (unless trailing-newline-indicator--active
+          (setq trailing-newline-indicator--active t)
+          (trailing-newline-indicator--increment-count))
+        (unless (memq #'trailing-newline-indicator--on-kill-buffer kill-buffer-hook)
+          (trailing-newline-indicator--setup-hooks)
+          (trailing-newline-indicator--update-indicator)))
+    (when trailing-newline-indicator--active
+      (setq trailing-newline-indicator--active nil)
       (trailing-newline-indicator--delete-overlay)
       (trailing-newline-indicator--decrement-count)
       (trailing-newline-indicator--cleanup-hooks))))
