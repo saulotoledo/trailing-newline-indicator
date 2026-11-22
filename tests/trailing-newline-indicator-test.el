@@ -504,18 +504,27 @@ Covers both normal edits and edits with `inhibit-modification-hooks' non-nil."
     (should (memq #'trailing-newline-indicator--update-indicator after-save-hook))
     (should (memq #'trailing-newline-indicator--update-indicator after-revert-hook))
     (should (memq #'trailing-newline-indicator--update-indicator post-command-hook))
-    (should (memq #'trailing-newline-indicator--on-kill-buffer   kill-buffer-hook))))
+    (should (memq #'trailing-newline-indicator--on-kill-buffer   kill-buffer-hook))
+    (should (memq #'trailing-newline-indicator--on-clone-buffer
+                  (default-value 'clone-buffer-hook)))
+    (should (memq #'trailing-newline-indicator--on-clone-buffer
+                  (default-value 'clone-indirect-buffer-hook)))))
 
 (ert-deftest tnli/hooks-removed-on-disable ()
   "All buffer-local hooks are removed when the mode is disabled."
-  (tnli-test--with-buffer "line1\n"
-    (trailing-newline-indicator-mode 1)
-    (trailing-newline-indicator-mode -1)
-    (should-not (memq #'trailing-newline-indicator--update-indicator after-change-functions))
-    (should-not (memq #'trailing-newline-indicator--update-indicator after-save-hook))
-    (should-not (memq #'trailing-newline-indicator--update-indicator after-revert-hook))
-    (should-not (memq #'trailing-newline-indicator--update-indicator post-command-hook))
-    (should-not (memq #'trailing-newline-indicator--on-kill-buffer   kill-buffer-hook))))
+  (let ((trailing-newline-indicator--active-count 0))
+    (tnli-test--with-buffer "line1\n"
+      (trailing-newline-indicator-mode 1)
+      (trailing-newline-indicator-mode -1)
+      (should-not (memq #'trailing-newline-indicator--update-indicator after-change-functions))
+      (should-not (memq #'trailing-newline-indicator--update-indicator after-save-hook))
+      (should-not (memq #'trailing-newline-indicator--update-indicator after-revert-hook))
+      (should-not (memq #'trailing-newline-indicator--update-indicator post-command-hook))
+      (should-not (memq #'trailing-newline-indicator--on-kill-buffer   kill-buffer-hook))
+      (should-not (memq #'trailing-newline-indicator--on-clone-buffer
+                        (default-value 'clone-buffer-hook)))
+      (should-not (memq #'trailing-newline-indicator--on-clone-buffer
+                        (default-value 'clone-indirect-buffer-hook))))))
 
 (ert-deftest tnli/hook-list-covers-all-expected-hooks ()
   "The hook list returned by `trailing-newline-indicator--hook-list' is complete."
@@ -771,6 +780,123 @@ changes."
       (should (trailing-newline-indicator--is-buffer-suitable-for-indicator-p))
       (setq-local trailing-newline-indicator-mode t)
       (should-not (trailing-newline-indicator--is-buffer-suitable-for-indicator-p)))))
+
+;;; Buffer cloning
+
+(ert-deftest tnli/clone-buffer-isolates-overlay-and-active-count ()
+  "Cloning a buffer creates an independent overlay and tracks active-count."
+  (let ((trailing-newline-indicator--active-count 0)
+        (b1 (generate-new-buffer " *tnli-clone-orig*"))
+        (b2 nil))
+    (unwind-protect
+        (progn
+          (with-current-buffer b1
+            (insert "line1\n")
+            (trailing-newline-indicator-mode 1)
+            (should (= 1 trailing-newline-indicator--active-count))
+            (setq b2 (clone-buffer " *tnli-clone-copy*")))
+          (should (= 2 trailing-newline-indicator--active-count))
+          (let ((ov1 (with-current-buffer b1 trailing-newline-indicator--overlay))
+                (ov2 (with-current-buffer b2 trailing-newline-indicator--overlay)))
+            (should (overlayp ov1))
+            (should (overlayp ov2))
+            (should-not (eq ov1 ov2))
+            (should (eq b1 (overlay-buffer ov1)))
+            (should (eq b2 (overlay-buffer ov2)))
+            ;; Killing clone must not delete original's overlay or corrupt count.
+            (kill-buffer b2)
+            (setq b2 nil)
+            (should (= 1 trailing-newline-indicator--active-count))
+            (should (eq b1 (overlay-buffer ov1))))
+          (kill-buffer b1)
+          (setq b1 nil)
+          (should (= 0 trailing-newline-indicator--active-count)))
+      (when (buffer-live-p b2) (kill-buffer b2))
+      (when (buffer-live-p b1) (kill-buffer b1)))))
+
+(ert-deftest tnli/clone-buffer-with-major-mode-hook-does-not-double-count ()
+  "Cloning a buffer whose major-mode hook enables the mode does not leak count."
+  (let ((trailing-newline-indicator--active-count 0)
+        (text-mode-hook (list #'trailing-newline-indicator-mode))
+        (b1 (generate-new-buffer " *tnli-hook-orig*"))
+        (b2 nil))
+    (unwind-protect
+        (progn
+          (with-current-buffer b1
+            (insert "line1\n")
+            (text-mode)
+            (should (= 1 trailing-newline-indicator--active-count))
+            (setq b2 (clone-buffer " *tnli-hook-copy*")))
+          (should (= 2 trailing-newline-indicator--active-count))
+          (kill-buffer b2)
+          (setq b2 nil)
+          (should (= 1 trailing-newline-indicator--active-count))
+          (kill-buffer b1)
+          (setq b1 nil)
+          (should (= 0 trailing-newline-indicator--active-count)))
+      (when (buffer-live-p b2) (kill-buffer b2))
+      (when (buffer-live-p b1) (kill-buffer b1)))))
+
+(ert-deftest tnli/clone-indirect-buffer-isolates-overlay-and-active-count ()
+  "Cloning an indirect buffer creates an independent overlay without affecting base."
+  (let ((trailing-newline-indicator--active-count 0)
+        (b1 (generate-new-buffer " *tnli-ind-base*"))
+        (b2 nil))
+    (unwind-protect
+        (progn
+          (with-current-buffer b1
+            (insert "line1\n")
+            (trailing-newline-indicator-mode 1)
+            (should (= 1 trailing-newline-indicator--active-count))
+            (setq b2 (clone-indirect-buffer " *tnli-ind-copy*" nil)))
+          (should (= 2 trailing-newline-indicator--active-count))
+          (let ((ov1 (with-current-buffer b1 trailing-newline-indicator--overlay))
+                (ov2 (with-current-buffer b2 trailing-newline-indicator--overlay)))
+            (should (overlayp ov1))
+            (should (overlayp ov2))
+            (should-not (eq ov1 ov2))
+            (should (eq b1 (overlay-buffer ov1)))
+            (should (eq b2 (overlay-buffer ov2)))
+            ;; Exactly one indicator overlay in indirect buffer (copied one swept).
+            (with-current-buffer b2
+              (should (= 1 (length (overlays-in (point-min) (point-max))))))
+            ;; Disabling mode in indirect buffer removes its overlay, not base's.
+            (with-current-buffer b2
+              (trailing-newline-indicator-mode -1)
+              (should-not trailing-newline-indicator--overlay)
+              (should (null (overlays-in (point-min) (point-max)))))
+            (should (= 1 trailing-newline-indicator--active-count))
+            (should (eq b1 (overlay-buffer ov1))))
+          (kill-buffer b2)
+          (setq b2 nil)
+          (should (= 1 trailing-newline-indicator--active-count))
+          (kill-buffer b1)
+          (setq b1 nil)
+          (should (= 0 trailing-newline-indicator--active-count)))
+      (when (buffer-live-p b2) (kill-buffer b2))
+      (when (buffer-live-p b1) (kill-buffer b1)))))
+
+(ert-deftest tnli/clone-buffer-disabled-in-base-with-major-mode-hook-cleans-up ()
+  "Cloning a buffer with mode disabled does not leak count or overlay via mode hook."
+  (let ((trailing-newline-indicator--active-count 0)
+        (text-mode-hook (list #'trailing-newline-indicator-mode))
+        (b1 (generate-new-buffer " *tnli-dis-orig*"))
+        (b2 nil))
+    (unwind-protect
+        (progn
+          (with-current-buffer b1
+            (insert "line1\n")
+            (text-mode)
+            (trailing-newline-indicator-mode -1)
+            (should (= 0 trailing-newline-indicator--active-count))
+            (setq b2 (clone-buffer " *tnli-dis-copy*")))
+          (should (= 0 trailing-newline-indicator--active-count))
+          (with-current-buffer b2
+            (should-not trailing-newline-indicator-mode)
+            (should-not trailing-newline-indicator--overlay)
+            (should (null (overlays-in (point-min) (point-max))))))
+      (when (buffer-live-p b2) (kill-buffer b2))
+      (when (buffer-live-p b1) (kill-buffer b1)))))
 
 (provide 'trailing-newline-indicator-test)
 ;;; trailing-newline-indicator-test.el ends here

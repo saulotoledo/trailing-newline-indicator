@@ -74,7 +74,7 @@
   "Number of buffers with `trailing-newline-indicator-mode' enabled.")
 
 (defvar-local trailing-newline-indicator--active nil
-  "Non-nil when buffer is counted in `trailing-newline-indicator--active-count'.")
+  "Buffer object when counted in `trailing-newline-indicator--active-count'.")
 
 (defvar-local trailing-newline-indicator--overlay nil
   "Overlay used to display the trailing newline ghost-text indicator.")
@@ -89,9 +89,11 @@
 (defun trailing-newline-indicator--delete-overlay ()
   "Delete the trailing newline indicator overlay in the current buffer."
   (setq trailing-newline-indicator--last-state nil)
-  (when (overlayp trailing-newline-indicator--overlay)
-    (delete-overlay trailing-newline-indicator--overlay)
-    (setq trailing-newline-indicator--overlay nil))
+  (when (and (overlayp trailing-newline-indicator--overlay)
+             (eq (overlay-buffer trailing-newline-indicator--overlay)
+                 (current-buffer)))
+    (delete-overlay trailing-newline-indicator--overlay))
+  (setq trailing-newline-indicator--overlay nil)
   (save-restriction
     (widen)
     (remove-overlays (max (point-min) (1- (point-max)))
@@ -218,6 +220,29 @@ This runs the cleanup logic of `trailing-newline-indicator-mode'."
   (when (bound-and-true-p trailing-newline-indicator-mode)
     (trailing-newline-indicator-mode -1)))
 
+(defun trailing-newline-indicator--recount-active ()
+  "Recompute `trailing-newline-indicator--active-count' from live buffers."
+  (let ((count 0))
+    (dolist (buf (buffer-list))
+      (when (eq (buffer-local-value 'trailing-newline-indicator--active buf) buf)
+        (setq count (1+ count))))
+    (setq trailing-newline-indicator--active-count count)))
+
+(defun trailing-newline-indicator--on-clone-buffer ()
+  "Isolate overlay and active-count state when a buffer is cloned."
+  (setq trailing-newline-indicator--overlay nil
+        trailing-newline-indicator--last-state nil)
+  (if (bound-and-true-p trailing-newline-indicator-mode)
+      (progn
+        (setq trailing-newline-indicator--active (current-buffer))
+        (trailing-newline-indicator--setup-hooks)
+        (trailing-newline-indicator--update-indicator)
+        (trailing-newline-indicator--recount-active))
+    (setq trailing-newline-indicator--active nil)
+    (trailing-newline-indicator--delete-overlay)
+    (trailing-newline-indicator--recount-active)
+    (trailing-newline-indicator--cleanup-hooks)))
+
 (defun trailing-newline-indicator--restore-hooks ()
   "Restore hooks if the mode is active but hooks were cleared.
 In Emacs 31+, major-mode transitions are more aggressive in clearing
@@ -234,6 +259,12 @@ function detects that orphaned state and re-attaches the hooks."
   (unless (memq #'trailing-newline-indicator--restore-hooks
                 (default-value 'after-change-major-mode-hook))
     (add-hook 'after-change-major-mode-hook #'trailing-newline-indicator--restore-hooks))
+  (unless (memq #'trailing-newline-indicator--on-clone-buffer
+                (default-value 'clone-buffer-hook))
+    (add-hook 'clone-buffer-hook #'trailing-newline-indicator--on-clone-buffer))
+  (unless (memq #'trailing-newline-indicator--on-clone-buffer
+                (default-value 'clone-indirect-buffer-hook))
+    (add-hook 'clone-indirect-buffer-hook #'trailing-newline-indicator--on-clone-buffer))
   (add-hook 'kill-buffer-hook #'trailing-newline-indicator--on-kill-buffer nil t)
   (let ((update-fn #'trailing-newline-indicator--update-indicator))
     (dolist (hook (trailing-newline-indicator--hook-list))
@@ -246,7 +277,9 @@ function detects that orphaned state and re-attaches the hooks."
     (dolist (hook (trailing-newline-indicator--hook-list))
       (remove-hook hook update-fn t)))
   (when (= trailing-newline-indicator--active-count 0)
-    (remove-hook 'after-change-major-mode-hook #'trailing-newline-indicator--restore-hooks)))
+    (remove-hook 'after-change-major-mode-hook #'trailing-newline-indicator--restore-hooks)
+    (remove-hook 'clone-buffer-hook #'trailing-newline-indicator--on-clone-buffer)
+    (remove-hook 'clone-indirect-buffer-hook #'trailing-newline-indicator--on-clone-buffer)))
 
 (defun trailing-newline-indicator--increment-count ()
   "Increment the global counter of buffers with mode enabled."
@@ -269,17 +302,16 @@ created by a trailing newline."
           (and (numberp trailing-newline-indicator-mode)
                (> trailing-newline-indicator-mode 0)))
       (progn
-        (unless trailing-newline-indicator--active
-          (setq trailing-newline-indicator--active t)
+        (unless (eq trailing-newline-indicator--active (current-buffer))
+          (setq trailing-newline-indicator--active (current-buffer))
           (trailing-newline-indicator--increment-count))
-        (unless (memq #'trailing-newline-indicator--on-kill-buffer kill-buffer-hook)
-          (trailing-newline-indicator--setup-hooks)
-          (trailing-newline-indicator--update-indicator)))
-    (when trailing-newline-indicator--active
+        (trailing-newline-indicator--setup-hooks)
+        (trailing-newline-indicator--update-indicator))
+    (trailing-newline-indicator--delete-overlay)
+    (when (eq trailing-newline-indicator--active (current-buffer))
       (setq trailing-newline-indicator--active nil)
-      (trailing-newline-indicator--delete-overlay)
-      (trailing-newline-indicator--decrement-count)
-      (trailing-newline-indicator--cleanup-hooks))))
+      (trailing-newline-indicator--decrement-count))
+    (trailing-newline-indicator--cleanup-hooks)))
 
 (defun trailing-newline-indicator--is-buffer-suitable-for-indicator-p ()
   "Return non-nil if the current buffer is suitable for the indicator.
