@@ -360,7 +360,7 @@ This happens regardless of `display-line-numbers'."
         (should (equal "⏎ 3" (substring-no-properties (tnli-test--before-string))))))))
 
 (ert-deftest tnli/relative-mode-skips-recalc-on-same-line-move ()
-  "In `relative' mode, horizontal move on same line skips `line-number-at-pos'."
+  "In `relative' mode, horizontal move on same line skips line-number recalculation."
   (tnli-test--with-buffer "abcdef\nline2\n"
     (let ((trailing-newline-indicator-newline-symbol "⏎")
           (trailing-newline-indicator-show-line-number t)
@@ -370,7 +370,7 @@ This happens regardless of `display-line-numbers'."
       (should (equal "⏎ 2" (substring-no-properties (tnli-test--before-string))))
       (let ((called nil))
         (forward-char 3) ; still on line 1
-        (cl-letf (((symbol-function 'line-number-at-pos)
+        (cl-letf (((symbol-function 'trailing-newline-indicator--line-number)
                    (lambda (&rest _) (setq called t) 1)))
           (run-hooks 'post-command-hook)
           (should-not called)))

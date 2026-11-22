@@ -120,9 +120,7 @@ because visual line counts depend on window width."
         0))
      ;; Relative mode with point on an earlier line.
      ((eq style 'relative)
-      (let ((eof-line (1+ (line-number-at-pos (1- visible-max))))
-            (cur-line (line-number-at-pos (point))))
-        (- eof-line cur-line)))
+      (count-lines (point) visible-max))
      ;; Absolute mode (any other non-nil value of `display-line-numbers').
      (t
       (let* ((raw-offset (bound-and-true-p display-line-numbers-offset))
