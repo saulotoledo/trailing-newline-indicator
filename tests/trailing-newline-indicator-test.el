@@ -89,6 +89,17 @@ Always disables the mode in the unwind handler, even on test failure."
     (should (= (overlay-start trailing-newline-indicator--overlay) (point-max)))
     (should (= (overlay-end   trailing-newline-indicator--overlay) (point-max)))))
 
+(ert-deftest tnli/overlay-advances-on-insert-at-point-max ()
+  "Overlay stays zero-width at (point-max) when text is inserted at EOF."
+  (tnli-test--with-buffer "line1\n"
+    (trailing-newline-indicator-mode 1)
+    (let ((inhibit-modification-hooks t)
+          (ov trailing-newline-indicator--overlay))
+      (goto-char (point-max))
+      (insert "line2\n")
+      (should (= (overlay-start ov) (point-max)))
+      (should (= (overlay-end   ov) (point-max))))))
+
 ;;; Ghost-text overlay properties
 
 (ert-deftest tnli/overlay-uses-before-string-not-after-string ()
@@ -133,6 +144,34 @@ Always disables the mode in the unwind handler, even on test failure."
       (trailing-newline-indicator-mode 1)
       (should (eq 'line-number
                   (get-text-property 0 'face (tnli-test--before-string)))))))
+
+(ert-deftest tnli/no-overlay-when-symbol-empty-and-line-number-hidden ()
+  "No overlay and no error when symbol is empty and line numbers are not shown."
+  (tnli-test--with-buffer "line1\n"
+    (let ((trailing-newline-indicator-newline-symbol "")
+          (trailing-newline-indicator-show-line-number nil)
+          (display-line-numbers t))
+      (trailing-newline-indicator-mode 1)
+      (should-not trailing-newline-indicator--overlay)))
+  (tnli-test--with-buffer "line1\n"
+    (let ((trailing-newline-indicator-newline-symbol "")
+          (trailing-newline-indicator-show-line-number t)
+          (display-line-numbers nil))
+      (trailing-newline-indicator-mode 1)
+      (should-not trailing-newline-indicator--overlay))))
+
+(ert-deftest tnli/line-number-only-without-leading-space-when-symbol-empty ()
+  "When symbol is empty and line numbers are active, show only the number w/o space."
+  (tnli-test--with-buffer "line1\nline2\n"
+    (let ((trailing-newline-indicator-newline-symbol "")
+          (trailing-newline-indicator-show-line-number t)
+          (display-line-numbers t))
+      (trailing-newline-indicator-mode 1)
+      (let ((str (tnli-test--before-string)))
+        (should (equal "3" (substring-no-properties str)))
+        (should (eq 'trailing-newline-indicator-small-number
+                    (get-text-property 0 'face str)))
+        (should (get-text-property 0 'cursor str))))))
 
 ;;; Line number content
 
