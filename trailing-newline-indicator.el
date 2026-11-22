@@ -283,8 +283,9 @@ created by a trailing newline."
 
 (defun trailing-newline-indicator--is-buffer-suitable-for-indicator-p ()
   "Return non-nil if the current buffer is suitable for the indicator.
-That means that the buffer is not a minibuffer, not a special mode
-buffer, and does not have the indicator already enabled."
+That means the buffer visits a file (`buffer-file-name'), is not a
+minibuffer, is not a special mode buffer, and does not have the
+indicator already enabled."
   (and (not (minibufferp))
        (not (derived-mode-p 'special-mode))
        buffer-file-name
