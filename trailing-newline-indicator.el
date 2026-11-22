@@ -21,8 +21,8 @@
 
 ;;; Commentary:
 
-;; `trailing-newline-indicator' provides a minor mode that displays a visual
-;; indicator in the left margin for the trailing newline at the end of a file.
+;; `trailing-newline-indicator' provides a minor mode that displays inline
+;; ghost text at the end of a file for the trailing newline.
 ;; This helps highlight the empty visual line that appears due to the final
 ;; newline character.
 ;;
@@ -77,7 +77,7 @@
   "Non-nil when buffer is counted in `trailing-newline-indicator--active-count'.")
 
 (defvar-local trailing-newline-indicator--overlay nil
-  "Overlay used to display the trailing newline indicator in the margin.")
+  "Overlay used to display the trailing newline ghost-text indicator.")
 
 (put 'trailing-newline-indicator--active 'permanent-local t)
 (put 'trailing-newline-indicator--overlay 'permanent-local t)
@@ -216,9 +216,9 @@ function detects that orphaned state and re-attaches the hooks."
 ;;;###autoload
 (define-minor-mode trailing-newline-indicator-mode
   "Minor mode to show a special indicator for trailing newlines.
-When enabled, displays a symbol (and optionally a small line number)
-in the left margin for the visual empty line created by a trailing
-newline."
+When enabled, displays an inline ghost-text symbol (and optionally a
+small line number) at the end of the buffer for the visual empty line
+created by a trailing newline."
   :lighter " TNLI"
   :group 'trailing-newline-indicator
   (if (or (eq trailing-newline-indicator-mode t)
