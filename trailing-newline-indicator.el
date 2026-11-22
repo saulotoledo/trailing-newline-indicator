@@ -14,7 +14,7 @@
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;; Author: Saulo S. de Toledo <saulotoledo@gmail.com>
-;; Version: 0.3.7
+;; Version: 0.3.8-snapshot
 ;; Package-Requires: ((emacs "26.1"))
 ;; Keywords: convenience, display, editing
 ;; URL: https://github.com/saulotoledo/trailing-newline-indicator
@@ -81,11 +81,13 @@
 ;;; Overlay Management:
 (defun trailing-newline-indicator--delete-overlay ()
   "Delete the trailing newline indicator overlay in the current buffer."
-  (when trailing-newline-indicator--overlay
-    (progn
-      (remove-overlays (point-max) (point-max)) ; Remove any overlays at the end of the buffer that could interfere
-      (delete-overlay trailing-newline-indicator--overlay)
-      (setq trailing-newline-indicator--overlay nil))))
+  (when (overlayp trailing-newline-indicator--overlay)
+    (delete-overlay trailing-newline-indicator--overlay)
+    (setq trailing-newline-indicator--overlay nil))
+  (remove-overlays (max (point-min) (1- (point-max)))
+                   (point-max)
+                   'trailing-newline-indicator
+                   t))
 
 (defun trailing-newline-indicator--update-indicator (&rest _)
   "Update the trailing newline indicator overlay in the current buffer.
@@ -109,6 +111,7 @@ adds a ghost text indicator at the end of the buffer."
       ;; the symbol when point is at (point-max), matching the look of
       ;; inline-completion ghost text instead of a solid block before it.
       (add-text-properties 0 1 '(cursor t) indicator-text)
+      (overlay-put ov 'trailing-newline-indicator t)
       (overlay-put ov 'before-string indicator-text)
       (overlay-put ov 'priority 100)
       (setq trailing-newline-indicator--overlay ov))))
